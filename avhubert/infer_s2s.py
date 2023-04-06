@@ -39,6 +39,7 @@ from fairseq.dataclass.configs import (
 from dataclasses import dataclass, field, is_dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 from omegaconf import OmegaConf
+import pdb 
 
 logging.root.setLevel(logging.INFO)
 logging.basicConfig(level=logging.INFO)
@@ -275,7 +276,6 @@ def hydra_main(cfg: InferConfig) -> Union[float, Tuple[float, Optional[float]]]:
         reset_logging()
 
     wer = float("inf")
-
     try:
         if cfg.common.profile:
             with torch.cuda.profiler.profile():

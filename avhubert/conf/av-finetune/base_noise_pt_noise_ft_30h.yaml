@@ -17,10 +17,12 @@ checkpoint:
 
 distributed_training:
   ddp_backend: c10d
+  distributed_backend: 'nccl'
+  distributed_init_method: 'env://'
   find_unused_parameters: true
-  distributed_world_size: 8
+  distributed_world_size: 4
   distributed_port: 29671
-  nprocs_per_node: 8
+  nprocs_per_node: 4
 
 task:
   _name: av_hubert_pretraining
@@ -75,7 +77,7 @@ lr_scheduler:
   final_lr_scale: 0.05
 
 model:
-  _name: av_hubert_seq2seq
+  _name: revise_avhubert
   w2v_path: ???
   apply_mask: false
   mask_selection: static
