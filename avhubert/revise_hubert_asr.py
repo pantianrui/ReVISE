@@ -223,7 +223,8 @@ class AVHubertCycle(BaseFairseqModel):
         #self.proj = nn.Linear(768,128)
         self.spectrogram_extractor = tl.Spectrogram(n_fft=512,hop_length=160)
         self.logmel_extractor = tl.LogmelFilterBank(sr=16000,n_fft=512,n_mels=104)
-        self.transpose = torch.nn.ConvTranspose1d(1)
+        self.transpose = torch.nn.ConvTranspose1d(in_channels=768,out_channels=768,kernel_size=4,stride=2)
+        self.activation = torch.nn.GELU()
 
     @classmethod
     def build_model(cls,cfg:AVHubertCycleConfig,task:FairseqTask):
@@ -318,11 +319,10 @@ class AVHubertCycle(BaseFairseqModel):
         source_decoder = logmel.squeeze(1) #(B,T,F)
         #print("source_decoder.shape\n",source_decoder.shape)
         decoder_output = self.decoder(source_decoder) #(7,277,104)
-        #print("decoder_output.shape\n",decoder_output) #(7,277)
-        B,T,F = encoder_output.shape
-        transpose_function = torch.nn.ConvTranspose1d(T,2*T+1,1).cuda()
-        encoder_output_upsample = transpose_function(encoder_output.type(torch.float32)) #(7,277,768)
-        #print("encoder_output_upsample.shape\n",encoder_output_upsample[0][0])
+        print("decoder_output.shape\n",decoder_output) #(7,277)
+        encoder_output_upsample = self.transpose(encoder_output.transpose(1,2).type(torch.float32)).transpose(1,2) #(7,277,768)
+        encoder_output_upsample = self.activation(encoder_output_upsample)
+        print("encoder_output_upsample.shape\n",encoder_output_upsample.shape)
         return encoder_output_upsample,decoder_output
 
     def set_num_updates(self, num_updates):

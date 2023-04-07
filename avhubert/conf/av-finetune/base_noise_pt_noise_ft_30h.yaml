@@ -42,7 +42,7 @@ task:
   pad_audio: true
   random_crop: false
   noise_prob: 0.25
-  noise_snr: 0
+  noise_snr: (-20,20)
   noise_wav: ???
 
 dataset:
@@ -59,8 +59,8 @@ criterion:
   label_smoothing: 0.1
 
 optimization:
-  max_update: 30000
-  lr: [0.001]
+  max_update: 45000
+  lr: [0.0001]
   sentence_avg: true
   update_freq: [1]
 
@@ -71,9 +71,9 @@ optimizer:
 
 lr_scheduler:
   _name: tri_stage
-  warmup_steps: 10000
+  warmup_steps: 4500
   hold_steps: 0
-  decay_steps: 20000
+  decay_steps: 40500
   final_lr_scale: 0.05
 
 model:
@@ -81,9 +81,9 @@ model:
   w2v_path: ???
   apply_mask: false
   mask_selection: static
-  mask_length: 10
+  mask_length: 1
   mask_other: 0
-  mask_prob: 0.75
+  mask_prob: 0.35
   mask_channel_selection: static
   mask_channel_length: 64
   mask_channel_other: 0
@@ -97,7 +97,7 @@ model:
   decoder_dropout: 0.1
   decoder_attention_dropout: 0.0
   decoder_activation_dropout: 0.1
-  freeze_finetune_updates: 24000
+  freeze_finetune_updates: 5000
   share_decoder_input_output_embed: true
   decoder_normalize_before: true
   vocoder_path: /home/ptr/ReVISE/avhubert/checkpoint/model.pt
