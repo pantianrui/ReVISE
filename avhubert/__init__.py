@@ -9,3 +9,5 @@ from .hubert_dataset import *
 from .hubert_pretraining import *
 from .hubert_criterion import *
 from .revise_hubert_asr import *
+from .l1_loss import *
+from .random_vq import *

@@ -1,7 +1,7 @@
 # @package _group_
 
 common:
-  fp16: true
+  fp16: false
   log_format: json
   log_interval: 200
   tensorboard_logdir: tblog
@@ -20,9 +20,9 @@ distributed_training:
   distributed_backend: 'nccl'
   distributed_init_method: 'env://'
   find_unused_parameters: true
-  distributed_world_size: 4
+  distributed_world_size: 8
   distributed_port: 29671
-  nprocs_per_node: 4
+  nprocs_per_node: 8
 
 task:
   _name: av_hubert_pretraining
@@ -100,6 +100,7 @@ model:
   freeze_finetune_updates: 24000
   share_decoder_input_output_embed: true
   decoder_normalize_before: true
+  vocoder_path: /home/ptr/ReVISE/avhubert/checkpoint/model.pt
 
 hydra:
   job:

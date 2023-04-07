@@ -9,7 +9,6 @@ import contextlib
 import tempfile
 from argparse import Namespace
 from typing import Any, Optional,List
-
 import torch
 import torch.nn as nn
 from dataclasses import dataclass, field
@@ -24,6 +23,7 @@ from python_speech_features import logfbank
 from .text_to_speech.vocoder import HiFiGANVocoder
 import torchaudio
 import torchlibrosa as tl
+from .random_vq.random_projection_quantizer import RandomProjectionQuantizer
 import pdb
 
 DBG=True if len(sys.argv) == 1 else False
@@ -209,10 +209,8 @@ class HubertEncoderWrapper(FairseqEncoder):
                 "padding_mask"
             ].index_select(0, new_order)
         return encoder_out
-
-    def get_normalized_probs(self,net_output, log_probs,sample):
-        return net_output[0]
-
+    
+    
 @register_model("revise_avhubert", dataclass=AVHubertCycleConfig)
 class AVHubertCycle(BaseFairseqModel):
     def __init__(self,encoder,vocoder,decoder,tgt_dict,cfg):
@@ -223,10 +221,9 @@ class AVHubertCycle(BaseFairseqModel):
         self.vocoder=vocoder
         self.decoder=decoder
         #self.proj = nn.Linear(768,128)
-        self.softmax = nn.Softmax(dim=2) #for channel dim
         self.spectrogram_extractor = tl.Spectrogram(n_fft=512,hop_length=160)
         self.logmel_extractor = tl.LogmelFilterBank(sr=16000,n_fft=512,n_mels=104)
-        self.transpose = torch.nn.ConvTranspose1d(138,277,1)
+        self.transpose = torch.nn.ConvTranspose1d(1)
 
     @classmethod
     def build_model(cls,cfg:AVHubertCycleConfig,task:FairseqTask):
@@ -289,7 +286,8 @@ class AVHubertCycle(BaseFairseqModel):
         encoder.w2v_model.remove_pretraining_modules()
 
         vocoder = HiFiGANVocoder(cfg.vocoder_path,cfg)
-        decoder = encoder
+        ###########################set decoder to random_vq#####################
+        decoder = RandomProjectionQuantizer(dim=104,codebook_size=767,codebook_dim=16)
         src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
 
         return AVHubertCycle(encoder,vocoder,decoder,tgt_dict,cfg)
@@ -312,26 +310,37 @@ class AVHubertCycle(BaseFairseqModel):
         vocoder_output = self.vocoder(encoder_output).squeeze(1) #B*44160
         sp = self.spectrogram_extractor(vocoder_output) #(B,1,277,257) (B,1,T,F)
         logmel = self.logmel_extractor(sp) # [B,1, T, F] (7,1,277,104)
+
         #audio_feats = self.stacker(logmel.squeeze(1),2) # [T/stack_order_audio, F*stack_order_audio]
         #print("audio_feats.shape\n",audio_feats.shape) #(7,139,104)
+        #source_decoder = {"audio": logmel.squeeze(1).transpose(1,2), "video": None}
 
-        source_decoder = {"audio": logmel.squeeze(1).transpose(1,2), "video": None}
-        decoder_output = self.decoder(source_decoder,None) #(7,277,768)
-        decoder_output = decoder_output['encoder_out'].transpose(0,1)
-        #print("decoder_output.shape\n",decoder_output.shape)
+        source_decoder = logmel.squeeze(1) #(B,T,F)
+        #print("source_decoder.shape\n",source_decoder.shape)
+        decoder_output = self.decoder(source_decoder) #(7,277,104)
+        #print("decoder_output.shape\n",decoder_output) #(7,277)
         B,T,F = encoder_output.shape
         transpose_function = torch.nn.ConvTranspose1d(T,2*T+1,1).cuda()
-        encoder_output_upsample = self.softmax(transpose_function(encoder_output.type(torch.float32))) #(7,277,768)
-
+        encoder_output_upsample = transpose_function(encoder_output.type(torch.float32)) #(7,277,768)
+        #print("encoder_output_upsample.shape\n",encoder_output_upsample[0][0])
         return encoder_output_upsample,decoder_output
 
     def set_num_updates(self, num_updates):
         """Set the number of parameters updates."""
         super().set_num_updates(num_updates)
         self.num_updates = num_updates
-
+    
     def get_targets(self,sample, net_output):
-        return net_output[1].max(dim=2)
+        #print("AAAAAAAAAAAAAAAAA\n")
+        targets = net_output[1]
+        #targets = targets.type(torch.int64)
+        return targets
+    
+    def get_normalized_probs(self,net_output,sample,log_probs):
+        if log_probs:
+            return utils.log_softmax(net_output[0].float(), dim=-1)
+        else:
+            return utils.softmax(net_output[0].float(), dim=-1)
 
 def Embedding(num_embeddings, embedding_dim, padding_idx):
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
