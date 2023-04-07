@@ -220,11 +220,11 @@ class AVHubertCycle(BaseFairseqModel):
         self.encoder=encoder
         self.vocoder=vocoder
         self.decoder=decoder
-        #self.proj = nn.Linear(768,128)
         self.spectrogram_extractor = tl.Spectrogram(n_fft=512,hop_length=160)
         self.logmel_extractor = tl.LogmelFilterBank(sr=16000,n_fft=512,n_mels=104)
-        self.transpose = torch.nn.ConvTranspose1d(in_channels=768,out_channels=768,kernel_size=4,stride=2)
+        self.transpose = torch.nn.ConvTranspose1d(in_channels=768,out_channels=768,kernel_size=3,stride=2)
         self.activation = torch.nn.GELU()
+        self.proj = nn.Linear(768,2000)
 
     @classmethod
     def build_model(cls,cfg:AVHubertCycleConfig,task:FairseqTask):
@@ -288,7 +288,7 @@ class AVHubertCycle(BaseFairseqModel):
 
         vocoder = HiFiGANVocoder(cfg.vocoder_path,cfg)
         ###########################set decoder to random_vq#####################
-        decoder = RandomProjectionQuantizer(dim=104,codebook_size=767,codebook_dim=16)
+        decoder = RandomProjectionQuantizer(dim=104,codebook_size=2000,codebook_dim=16)
         src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
 
         return AVHubertCycle(encoder,vocoder,decoder,tgt_dict,cfg)
@@ -304,25 +304,22 @@ class AVHubertCycle(BaseFairseqModel):
 
     def forward(self,**kwargs):
         ft = self.freeze_finetune_updates <= self.num_updates
-        #with torch.no_grad() if not ft else contextlib.ExitStack():
-        output = self.encoder(**kwargs) 
+        with torch.no_grad() if not ft else contextlib.ExitStack():
+            output = self.encoder(**kwargs) 
 
         encoder_output = output['encoder_out'].transpose(0,1) #(7,138,768)
         vocoder_output = self.vocoder(encoder_output).squeeze(1) #B*44160
         sp = self.spectrogram_extractor(vocoder_output) #(B,1,277,257) (B,1,T,F)
         logmel = self.logmel_extractor(sp) # [B,1, T, F] (7,1,277,104)
-
-        #audio_feats = self.stacker(logmel.squeeze(1),2) # [T/stack_order_audio, F*stack_order_audio]
-        #print("audio_feats.shape\n",audio_feats.shape) #(7,139,104)
-        #source_decoder = {"audio": logmel.squeeze(1).transpose(1,2), "video": None}
-
         source_decoder = logmel.squeeze(1) #(B,T,F)
-        #print("source_decoder.shape\n",source_decoder.shape)
-        decoder_output = self.decoder(source_decoder) #(7,277,104)
-        print("decoder_output.shape\n",decoder_output) #(7,277)
+
+        with torch.no_grad():
+            decoder_output = self.decoder(source_decoder) #(7,277,104)
+        #print("decoder_output.shape\n",decoder_output.shape) #(7,277)
         encoder_output_upsample = self.transpose(encoder_output.transpose(1,2).type(torch.float32)).transpose(1,2) #(7,277,768)
         encoder_output_upsample = self.activation(encoder_output_upsample)
-        print("encoder_output_upsample.shape\n",encoder_output_upsample.shape)
+        encoder_output_upsample = self.proj(encoder_output_upsample) #(7,277,2000)
+        #print("encoder_output_upsample.shape\n",encoder_output_upsample.shape)
         return encoder_output_upsample,decoder_output
 
     def set_num_updates(self, num_updates):
