@@ -570,7 +570,7 @@ class AVHubertModel(BaseFairseqModel):
         padding_mask = padding_mask.view(
             padding_mask.size(0), features.size(1), -1
         )
-        padding_mask = padding_mask.all(-1)
+        padding_mask = padding_mask.all(-1) #check if the values along dim=-1 are all true,shape=[padding_mask.size(0), features.size(1)]
         return padding_mask
 
     def compute_logits(self, feats, emb_mat):
