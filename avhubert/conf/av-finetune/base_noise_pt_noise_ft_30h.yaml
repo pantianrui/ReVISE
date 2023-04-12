@@ -20,9 +20,9 @@ distributed_training:
   distributed_backend: 'nccl'
   distributed_init_method: 'env://'
   find_unused_parameters: true
-  distributed_world_size: 8
+  distributed_world_size: 2
   distributed_port: 29671
-  nprocs_per_node: 8
+  nprocs_per_node: 2
 
 task:
   _name: av_hubert_pretraining
@@ -54,7 +54,7 @@ dataset:
   valid_subset: valid
 
 criterion:
-  _name: label_smoothed_cross_entropy
+  _name: mse_loss
   report_accuracy: true
   label_smoothing: 0.1
 
@@ -100,7 +100,7 @@ model:
   freeze_finetune_updates: 5000
   share_decoder_input_output_embed: true
   decoder_normalize_before: true
-  vocoder_path: /home/ptr/ReVISE/avhubert/checkpoint/model.pt
+  vocoder_path: /home/iris/ptr/ReVISE/avhubert/checkpoint/model.pt
 
 hydra:
   job:
