@@ -14,7 +14,9 @@ from fairseq.dataclass import FairseqDataclass
 from omegaconf import II
 from dataclasses import dataclass, field
 import torch
-
+from scipy.io import wavfile
+import os
+from torch.nn.utils.rnn import pad_sequence
 
 @dataclass
 class MSELossCriterionConfig(FairseqDataclass):
@@ -57,8 +59,21 @@ class MSELossCriterion(FairseqCriterion):
 
 
     def compute_loss(self, model, net_output, sample, reduce=True):
-        lprobs = model.get_normalized_probs(net_output,log_probs=True)
-        target = model.get_targets(sample, net_output)
+        lprobs = model.get_mse_output(net_output) 
+        #print("lprobs.shape\n",lprobs.shape) #([24, 22720])
+        #print("GGGGGG\n",sample['utt_id']) #dict_keys(['id', 'net_input', 'utt_id', 'target_lengths', 'ntokens', 'target'])
+        target = [torch.from_numpy(wavfile.read(os.path.join('/home/iris/data0/ptr_dataset/lrs3/audio/',uid+'.wav'))[1]) for uid in sample['utt_id']]
+        target = pad_sequence(target, batch_first=True, padding_value=0)
+        target = target.to(lprobs.device)
+        target = target.type_as(lprobs)
+        #print("target.shape\n",target.shape) #([24, 22528])
+        target_dim = target.shape[1]
+        lprobs_dim = lprobs.shape[1]
+        if lprobs_dim > target_dim:
+           lprobs = lprobs[:,:target_dim]
+        elif lprobs_dim < target_dim:
+           dif = target_dim - lprobs_dim
+           lprobs = F.pad(lprobs, (0,dif, 0, 0), mode='constant', value=0)
         loss = self.mse(
             lprobs,
             target,

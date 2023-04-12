@@ -19,6 +19,7 @@ from fairseq.models import BaseFairseqModel, FairseqEncoder, FairseqEncoderDecod
 from fairseq.models.hubert.hubert import MASKING_DISTRIBUTION_CHOICES
 from fairseq.tasks import FairseqTask
 from omegaconf import II, MISSING
+import wavfile
 from python_speech_features import logfbank
 from .text_to_speech.vocoder import HiFiGANVocoder
 import torchaudio
@@ -303,11 +304,13 @@ class AVHubertCycle(BaseFairseqModel):
         return feats
 
     def forward(self,**kwargs):
-        ft = self.freeze_finetune_updates <= self.num_updates
-        with torch.no_grad() if not ft else contextlib.ExitStack():
-            output = self.encoder(**kwargs) 
+        #ft = self.freeze_finetune_updates <= self.num_updates
+        #with torch.no_grad() if not ft else contextlib.ExitStack():
+        output = self.encoder(**kwargs) 
 
         encoder_output = output['encoder_out'].transpose(0,1) #(7,138,768)
+        #encoder_output_upsample = self.transpose(encoder_output.transpose(1,2).type(torch.float32)).transpose(1,2) #(7,277,768)
+        #encoder_output = self.activation(encoder_output_upsample)
         vocoder_output = self.vocoder(encoder_output).squeeze(1) #B*44160
         sp = self.spectrogram_extractor(vocoder_output) #(B,1,277,257) (B,1,T,F)
         logmel = self.logmel_extractor(sp) # [B,1, T, F] (7,1,277,104)
@@ -320,7 +323,7 @@ class AVHubertCycle(BaseFairseqModel):
         encoder_output_upsample = self.activation(encoder_output_upsample)
         encoder_output_upsample = self.proj(encoder_output_upsample) #(7,277,2000)
         #print("encoder_output_upsample.shape\n",encoder_output_upsample.shape)
-        return encoder_output_upsample,decoder_output
+        return encoder_output_upsample,decoder_output,vocoder_output
 
     def set_num_updates(self, num_updates):
         """Set the number of parameters updates."""
