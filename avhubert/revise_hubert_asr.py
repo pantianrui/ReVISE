@@ -19,7 +19,6 @@ from fairseq.models import BaseFairseqModel, FairseqEncoder, FairseqEncoderDecod
 from fairseq.models.hubert.hubert import MASKING_DISTRIBUTION_CHOICES
 from fairseq.tasks import FairseqTask
 from omegaconf import II, MISSING
-import wavfile
 from python_speech_features import logfbank
 from .text_to_speech.vocoder import HiFiGANVocoder
 import torchaudio
@@ -304,24 +303,22 @@ class AVHubertCycle(BaseFairseqModel):
         return feats
 
     def forward(self,**kwargs):
-        #ft = self.freeze_finetune_updates <= self.num_updates
-        #with torch.no_grad() if not ft else contextlib.ExitStack():
-        output = self.encoder(**kwargs) 
+        ft = self.freeze_finetune_updates <= self.num_updates
+        with torch.no_grad() if not ft else contextlib.ExitStack():
+            output = self.encoder(**kwargs) 
 
         encoder_output = output['encoder_out'].transpose(0,1) #(7,138,768)
-        #encoder_output_upsample = self.transpose(encoder_output.transpose(1,2).type(torch.float32)).transpose(1,2) #(7,277,768)
-        #encoder_output = self.activation(encoder_output_upsample)
+        encoder_output_upsample = self.transpose(encoder_output.transpose(1,2).type(torch.float32)).transpose(1,2) #(7,277,768)
+        encoder_output = self.activation(encoder_output_upsample)
         vocoder_output = self.vocoder(encoder_output).squeeze(1) #B*44160
         sp = self.spectrogram_extractor(vocoder_output) #(B,1,277,257) (B,1,T,F)
         logmel = self.logmel_extractor(sp) # [B,1, T, F] (7,1,277,104)
         source_decoder = logmel.squeeze(1) #(B,T,F)
 
-        with torch.no_grad():
-            decoder_output = self.decoder(source_decoder) #(7,277,104)
+        #with torch.no_grad():
+        decoder_output = self.decoder(source_decoder) #(7,277,104)
         #print("decoder_output.shape\n",decoder_output.shape) #(7,277)
-        encoder_output_upsample = self.transpose(encoder_output.transpose(1,2).type(torch.float32)).transpose(1,2) #(7,277,768)
-        encoder_output_upsample = self.activation(encoder_output_upsample)
-        encoder_output_upsample = self.proj(encoder_output_upsample) #(7,277,2000)
+        encoder_output_upsample = self.proj(encoder_output) #(7,277,2000)
         #print("encoder_output_upsample.shape\n",encoder_output_upsample.shape)
         return encoder_output_upsample,decoder_output,vocoder_output
 
@@ -336,6 +333,10 @@ class AVHubertCycle(BaseFairseqModel):
         #targets = targets.type(torch.int64)
         return targets
     
+    def get_mse_output(self,net_output):
+        vocoder_output = net_output[2]
+        return vocoder_output
+
     def get_normalized_probs(self,net_output,sample,log_probs):
         if log_probs:
             return utils.log_softmax(net_output[0].float(), dim=-1)
