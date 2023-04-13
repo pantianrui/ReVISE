@@ -155,7 +155,10 @@ class Generator(torch.nn.Module):
         x = self.conv_pro(x)
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)
+            print("x.shape\n",x.shape)
             x = self.ups[i](x)
+            print("x.shape\n",x.shape)
+            pdb.set_trace()
             xs = None
             for j in range(self.num_kernels):
                 if xs is None:

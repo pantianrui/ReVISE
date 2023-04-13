@@ -15,7 +15,7 @@ from torch import nn
 from fairseq.data.audio.speech_to_text_dataset import S2TDataConfig
 from fairseq.models import BaseFairseqModel, register_model
 #from codehifigan import CodeGenerator as CodeHiFiGANModel
-from .hifigan import Generator as HiFiGANModel
+from .resynthesis import Generator as HiFiGANModel
 from .hub_interface import VocoderHubInterface
 import pdb
 logger = logging.getLogger(__name__)
@@ -27,8 +27,8 @@ class HiFiGANVocoder(nn.Module):
     ) -> None:
         super().__init__()
         self.model = HiFiGANModel(model_cfg)
-        state_dict = torch.load(checkpoint_path)
-        self.model.load_state_dict(state_dict["generator"],strict=False)
+        #state_dict = torch.load(checkpoint_path)
+        #self.model.load_state_dict(state_dict["generator"],strict=False)
         if fp16:
             self.model.half()
         logger.info(f"loaded HiFiGAN checkpoint from {checkpoint_path}")
